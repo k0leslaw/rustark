@@ -10,6 +10,8 @@
 
 # find a flashlight that makes you see 9 squares instead
 
+# started writing Player.move()
+
 class Player:
     """
     Represents a player in a Rustark game.
@@ -18,7 +20,7 @@ class Player:
     def __init__(self):
         self._inventory = []
         self._achievements = []
-        self._position = [9, 0]
+        self._position = [0, 9]
         self._letter = "!"
 
     def get_inventory(self):
@@ -37,33 +39,29 @@ class Player:
         """Returns letter"""
         return self._letter
 
+    def move(self, game, map, new_pos):
+        """
+        Moves the player to the given position ([row, col]) and returns True if the move is possible.
+        Otherwise, returns False.
+        """
+        if new_pos in game.find_adjacent_pos(self._position):  # new_pos is adjacent to player
+            if type(map[new_pos[1]][new_pos[0]]) is Empty:  # new_pos is empty
+                self._position = new_pos
+                return True
+        return False
+
 
 class Item:
     """
-    Represents an item in a Rustark game.
-    Has a name (str), position in list form [row, col], boolean isFound, and letter.
+    Represents an item found in a Crate within a Rustark game.
+    Has a name (str).
     """
-    def __init__(self, name, pos, found, letter):
+    def __init__(self, name):
         self._name = name
-        self._position = pos
-        self._isFound = found
-        self._letter = letter
 
     def get_name(self):
         """Returns the item's name."""
         return self._name
-
-    def get_position(self):
-        """Returns the item's position."""
-        return self._position
-
-    def get_is_found(self):
-        """Returns True if the item has been found, otherwise returns False."""
-        return self._isFound
-
-    def get_letter(self):
-        """Returns letter"""
-        return self._letter
 
 
 class Generator:
@@ -207,10 +205,17 @@ class Map:
         """Returns the map"""
         return self._game_map
 
+    def get_object_by_position(self, pos):
+        """Returns the object at a given position in form [row, col]"""
+        return self._game_map[pos[1]][pos[0]]
+
     def add_object(self, obj, pos):
         """Adds a given object to the given position (list form [row, col]) on the map"""
         self._game_map[pos[1]][pos[0]] = obj
 
+    def remove_object(self, pos):
+        """Replaces the object at the given position ([row, col]) with an Empty object."""
+        self._game_map[pos[1]][pos[0]] = Empty(True)
 
 class Rustark:
     """
@@ -244,10 +249,60 @@ class Rustark:
         game_map.add_object(Generator([1, 1], False), [1, 1])
 
         # add hints
-        game_map.add_object(Hint("text", [0, 8], True), [0, 8])
+        game_map.add_object(Hint("oh no! one of the wires for the generator ahead is broken. I wonder which one...", [0, 8], True), [0, 8])
 
         # add crates
-        game_map.add_object(Crate([], [1, 8], True), [1, 8])
+        game_map.add_object(Crate([Item("wire")], [1, 8], True), [1, 8])
+
+    @staticmethod
+    def find_adjacent_pos(pos):
+        """Returns a list of lists of board positions adjacent to the player's current position."""
+        pos_list = []
+        potential_pos = [[pos[0] + 1, pos[1] + 1],  # diagonal moves
+                         [pos[0] - 1, pos[1] - 1],
+                         [pos[0] + 1, pos[1] - 1],
+                         [pos[0] - 1, pos[1] + 1],
+                         [pos[0] + 1, pos[1]],  # straight moves
+                         [pos[0] - 1, pos[1]],
+                         [pos[0], pos[1] - 1],
+                         [pos[0], pos[1] + 1]]
+
+        for pos in potential_pos:
+            if 0 <= pos[0] <= 9 and 0 <= pos[1] <= 9:
+                pos_list.append(pos)
+
+        return pos_list
+
+    def make_move(self, new_pos):
+        """Takes a new_pos list in form [row, col] and implements the consequences if possible."""
+        prev_pos = self._player.get_position()
+        if self._player.move(self, self.get_map(), new_pos) is True:  # new_pos is empty and in range
+            self._game_map.add_object(self._player, new_pos)
+            self._game_map.remove_object(prev_pos)
+
+    def interact(self, item_letter):
+        """
+        Interacts with an item (if possible) given its letter and implements the consequences.
+        Returns False if not possible, otherwise returns data relevant to interaction.
+        """
+        in_range_positions = self.find_adjacent_pos(self._player.get_position())
+        interactables_dict = {}
+        for pos in in_range_positions:
+            interactable = self.get_map()[pos[1]][pos[0]]
+            letter = interactable.get_letter()
+            if letter != "-":
+                interactables_dict[letter] = interactable
+
+        if item_letter in interactables_dict:
+            if item_letter == "h":
+                return interactables_dict["h"].get_text()
+            elif item_letter == "c":
+                return "crate"
+            elif item_letter == "g":
+                return "generator, unpowered"
+            elif item_letter == "G":
+                return "generator, powered"
+        return False
 
     def display_map(self):
         """Prints the map according to what the player has discovered."""
@@ -266,10 +321,28 @@ class Rustark:
             row_count += 1
         print("  0  1  2  3  4  5  6  7  8  9")
 
+    def display_situation(self):
+        """Prints the current situation based on where the player is located on the map."""
+        pos = self._player.get_position()
+        current_space = self._game_map.get_object_by_position(pos)
+        letter = current_space.get_letter()
+
+        print(f"You are at {pos}.")
+        if letter == "!":
+            print("Nothing to see here...")
+        elif letter == "h":
+            print(f"A faded paper reads: {current_space.get_text()}")
+
 
 def main():
     game = Rustark()
     game.display_map()
+    game.make_move([1, 9])
+
+    game.display_map()
+    print(game.interact("h"))
+
+    # game.display_situation()
 
 
 if __name__ == "__main__":
